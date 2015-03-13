@@ -190,6 +190,27 @@ pub fn parse_html(document: JSRef<Document>,
                     let page = format!("<html><body><img src='{}' /></body></html>", url.serialize());
                     parser.parse_chunk(page);
                 },
+                Some((ref t, ref st)) if t.as_slice().eq_ignore_ascii_case("text") &&
+                                         st.as_slice().eq_ignore_ascii_case("plain") => {
+                    let page = format!("<html><body><pre>");
+                    parser.parse_chunk(page);
+                    for msg in load_response.progress_port.iter() {
+                        match msg {
+                            ProgressMsg::Payload(data) => {
+                                // FIXME: use Vec<u8> (html5ever #34)
+                                let data = UTF_8.decode(data.as_slice(), DecoderTrap::Replace).unwrap();
+                                let data = data.replace("<", "&lt;");
+                                parser.parse_chunk(data);
+                            }
+                            ProgressMsg::Done(Err(err)) => {
+                                panic!("Failed to load page URL {}, error: {}", url.serialize(), err);
+                            }
+                            ProgressMsg::Done(Ok(())) => break,
+                        }
+                    }
+                    let page = format!("</pre></body></html>");
+                    parser.parse_chunk(page);
+                },
                 _ => {
                     for msg in load_response.progress_port.iter() {
                         match msg {
